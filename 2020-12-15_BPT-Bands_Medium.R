@@ -7,6 +7,7 @@ df_btc <- read_csv(file = "https://coinmetrics.io/newdata/btc.csv")
 write.csv(df_btc,"raw.csv", row.names = TRUE)
 df_btc <- read_csv("raw.csv")
 
+df_btc$date <- df_btc$time
 # Per cycle variables
 df_btc <- df_btc %>%
   mutate(cycle = ifelse(date < as.Date("2012-11-28"), 0,
