@@ -4,6 +4,8 @@
 ## 0 Data preparation ----
 library(tidyverse)
 df_btc <- read_csv(file = "https://coinmetrics.io/newdata/btc.csv")
+write.csv(df_btc,"raw.csv", row.names = TRUE)
+df_btc <- read_csv("raw.csv")
 
 # Per cycle variables
 df_btc <- df_btc %>%
@@ -47,6 +49,17 @@ for (i in 1:nrow(df_btc)){df_btc$sd4y[i] <- sd(df_btc$PriceUSD[ifelse(i<1460,0,(
 
 df_btc$bpt <- 0
 for (i in 1:nrow(df_btc)){df_btc$bpt[i] <- (df_btc$PriceUSD[i] - df_btc$ma4y[i]) / df_btc$sd4y[i]}
+
+# Bitcoin S2F Model
+df_btc$s2f <- 0
+for (i in 1:nrow(df_btc)){df_btc$s2f[i] <- 1 / ((df_btc$SplyCur[i+1] - df_btc$SplyCur[i]) / df_btc$SplyCur[i] * 365)}
+
+df_btc$mas2f100 <- 0
+for (i in 1:nrow(df_btc)){df_btc$mas2f100[i] <- mean(df_btc$s2f[ifelse(i < 460, 0, (i-460)):i], na.rm = TRUE)}
+
+df_btc$s2ftarget <- 0
+for (i in 1:nrow(df_btc)){df_btc$s2ftarget[i] <- exp(12.7598) * df_btc$mas2f100[i]^4 / df_btc$SplyCur[i] }
+
 
 # BPT Bands
 df_btc <- df_btc %>%
@@ -468,4 +481,47 @@ chart_cycle4_bpt <- ggplot(df_cor, aes(x = day)) +
 
 ggsave(here::here(paste("Figures/", as.character(Sys.Date()), "_cor-2v3.png", sep = "")), chart_cycle4_bpt, height = 12.5 / 1.78, width = 12.5, dpi = 320, units = "in")
 
+
+## S2F Chart ----
+Sys.setlocale("LC_TIME", "C")
+firstvalidprice <- df_btc$PriceUSD[min(which(!is.na(df_btc$PriceUSD)))]
+row_number_firstvalidprice <- as.numeric(which(df_btc$PriceUSD == firstvalidprice))
+chart_logprice_curprice <- c(paste(" $", as.character(round(last(df_btc$PriceUSD), digits = 0)), sep=""))
+chart_logprice <- ggplot(df_btc, aes(x = date)) +
+  # geom_line(aes(y = s2f, colour = "S2F"), size = 0.25) +
+  # geom_line(aes(y = mas2f100, colour = "MA 100 S2F"), size = 0.25) +
+  geom_line(aes(y = s2ftarget, colour = "S2F Target"), size = 0.5) +
+  geom_vline(xintercept = as.Date(c("2012-11-28","2016-07-09","2020-05-09")),
+             linetype=2, size = 0.25, color = "white") +
+  geom_vline(xintercept = df_btc$date[row_number_firstvalidprice+1460],
+             linetype=2, size = 0.25, color = "black", alpha = 0.5) +
+  geom_line(aes(y = PriceUSD, colour = "black"), size=0.5) +
+  scale_y_log10(labels=scales::dollar_format(),
+                breaks = c(0,1,10,100,1000,10000,100000),
+                minor_breaks = c(seq(0, 1, 0.1),
+                                 seq(0, 10, 1),
+                                 seq(0, 100, 10),
+                                 seq(0, 1000, 100),
+                                 seq(0, 10000, 1000),
+                                 seq(0, 100000, 10000),
+                                 seq(0, 1000000, 100000))) +
+  scale_x_date(breaks = "1 year",
+               minor_breaks = NULL,
+               date_labels = "%Y",
+               limits = as.Date(c(df_btc$date[min(which(!is.na(df_btc$PriceUSD)))], last(df_btc$date)+30))) +
+  scale_colour_manual(name = "Legend", values = c("black", "white", "blue", "green")) +
+  labs(title = "Bitcoin S2F",
+       subtitle = paste("Logarithmic chart | Date = ",
+                        as.character(format(Sys.Date(), "%a %b %d, %Y")), sep = ""),
+       x = "Time", y = "USD") +
+  theme_dark() +
+  annotate("text", x = as.Date("2012-11-28"), min(df_btc$PriceUSD, na.rm = T), label= "\nHalving 1", angle = 90, fontface = "plain", size = 3, color = "white", hjust = 0) +
+  annotate("text", x = as.Date("2016-07-09"), min(df_btc$PriceUSD, na.rm = T), label= "\nHalving 2", angle = 90, fontface = "plain", size = 3, color = "white", hjust = 0) +
+  annotate("text", x = as.Date("2020-05-09"), min(df_btc$PriceUSD, na.rm = T), label= "\nHalving 3", angle = 90, fontface = "plain", size = 3, color = "white", hjust = 0) +
+  annotate("label", x = as.Date("2010-10-01"), y = 40000, size = 3, label = "Data:") +
+  annotate("text", x = last(df_btc$date), y = last(df_btc$PriceUSD), label =  chart_logprice_curprice, fontface = "plain", size = 3, color = "white", hjust = 0) +
+  annotate("text", x = last(df_btc$date), y = last(df_btc$s2ftarget), label =
+           paste(" $", as.character(round(last(df_btc$s2ftarget), digits = 0)), sep=""), fontface = "plain", size = 3, color = "white", hjust = 0)
+
+ggsave(here::here(paste("Figures/", as.character(Sys.Date()), "_s2f.png", sep = "")), chart_logprice, height = 12.5 / 1.78, width = 12.5, dpi = 320, units = "in")
 
