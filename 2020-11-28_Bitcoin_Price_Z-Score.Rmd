@@ -12,6 +12,7 @@ This R markdown file contains the code and charts that I've used for my blog pos
 ```{r}
 library(tidyverse)
 df_btc <- read_csv(file = "https://coinmetrics.io/newdata/btc.csv")
+df_btc$date <- df_btc$time
 write.csv(df_btc,"btc.csv", row.names = TRUE)
 ```
 
